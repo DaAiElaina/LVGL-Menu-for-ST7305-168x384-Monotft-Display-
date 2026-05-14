@@ -1,4 +1,4 @@
-# LVGL Menu for ST7305 (168x384 Monochrome Display)
+# LVGL Menu for ST7305 (168x384 MonotftDisplay)
 
 基于 LVGL 8.3.10 和 ST7305 monotft屏的菜单系统，支持摇杆控制焦点切换和菜单导航。
 
