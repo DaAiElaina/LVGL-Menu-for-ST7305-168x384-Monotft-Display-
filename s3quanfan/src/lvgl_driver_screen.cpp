@@ -3,35 +3,59 @@
 #include <ST7305_2p9_BW_DisplayDriver.h>
 #include <ST73xxPins.h>
 
-// 引脚定义
 #define PIN_DC      38
 #define PIN_RST     0
 #define PIN_CS      45
 #define PIN_SCLK    36
 #define PIN_SDIN    37
 
-// 全局显示对象
-static const ST73xxPins PINS{PIN_DC, PIN_CS, PIN_SCLK, PIN_SDIN, PIN_RST};
+const ST73xxPins PINS{PIN_DC, PIN_CS, PIN_SCLK, PIN_SDIN, PIN_RST};
 static ST7305_2p9_BW_DisplayDriver display(PINS, SPI);
 
-// LVGL 缓冲区
-#define DRAW_BUF_SIZE (DISPLAY_W * 40)
+#define DRAW_BUF_SIZE (LV_W * 40)
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t buf[DRAW_BUF_SIZE];
 
-// 显示刷新回调
+// 坐标旋转函数
+static void rotate_coord(int32_t x, int32_t y, int32_t *out_x, int32_t *out_y) {
+#if LVGL_ROTATION == 1
+    // 顺时针 90 度
+    *out_x = y;
+    *out_y = LV_W - 1 - x;
+#elif LVGL_ROTATION == 2
+    // 逆时针 90 度
+    *out_x = LV_H - 1 - y;
+    *out_y = x;
+#elif LVGL_ROTATION == 3
+    // 180 度
+    *out_x = LV_W - 1 - x;
+    *out_y = LV_H - 1 - y;
+#else
+    // 不旋转
+    *out_x = x;
+    *out_y = y;
+#endif
+}
+
+// 显示刷新回调（支持软件横屏）
 void lvgl_disp_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map) {
-    uint32_t w = (area->x2 - area->x1 + 1);
-    uint32_t h = (area->y2 - area->y1 + 1);
+    int32_t w = area->x2 - area->x1 + 1;
+    int32_t h = area->y2 - area->y1 + 1;
     int32_t idx = 0;
 
-    for (uint32_t y = 0; y < h; y++) {
-        for (uint32_t x = 0; x < w; x++) {
-            uint16_t px = area->x1 + x;
-            uint16_t py = area->y1 + y;
-
-            if (px < DISPLAY_W && py < DISPLAY_H) {
-                display.writePoint(px, py, (bool)!color_map[idx].full);
+    for (int32_t y = 0; y < h; y++) {
+        for (int32_t x = 0; x < w; x++) {
+            // LVGL 输出的原始坐标
+            int32_t lv_x = area->x1 + x;
+            int32_t lv_y = area->y1 + y;
+            
+            // 旋转后的物理坐标
+            int32_t phys_x, phys_y;
+            rotate_coord(lv_x, lv_y, &phys_x, &phys_y);
+            
+            // 边界检查
+            if (phys_x >= 0 && phys_x < PHY_W && phys_y >= 0 && phys_y < PHY_H) {
+                display.writePoint(phys_x, phys_y, (bool)!color_map[idx].full);
             }
             idx++;
         }
@@ -55,8 +79,8 @@ void lvgl_screen_init() {
 
     static lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = DISPLAY_W;
-    disp_drv.ver_res = DISPLAY_H;
+    disp_drv.hor_res = LV_W;      // LVGL 逻辑宽度（横屏）
+    disp_drv.ver_res = LV_H;      // LVGL 逻辑高度（横屏）
     disp_drv.flush_cb = lvgl_disp_flush;
     disp_drv.draw_buf = &draw_buf;
     lv_disp_drv_register(&disp_drv);
